@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Node.js
+dist/
+node_modules/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+
+# Build directories
+build/
+
+# System Files
+Thumbs.db
