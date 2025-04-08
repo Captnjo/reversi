@@ -13,6 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const pvcButton = document.getElementById('pvc-button');
     const difficultySelect = document.getElementById('difficulty-select');
     // Theme toggle elements removed - always using dark mode
+    
+    // --- Sound Elements ---
+    const soundToggleBtn = document.getElementById('sound-toggle');
+    const placePieceSound = new Audio('audio/place-piece.mp3');
+    const turnChangeSound = new Audio('audio/turn-change.mp3');
+    const gameOverSound = new Audio('audio/game-over.mp3');
 
     // --- Constants ---
     const BOARD_SIZE = 8;
@@ -40,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let humanPlayer = BLACK;
     let computerPlayer = WHITE;
     let isComputerTurn = false;
+    let soundEnabled = localStorage.getItem('reversiSoundEnabled') !== 'false'; // Default to true
 
     // --- Initialization and UI Switching ---
     function showScreen(screenToShow) {
@@ -219,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (board[row][col] !== EMPTY || discsToFlip.length === 0) return false; // Cannot place if occupied or invalid move
         board[row][col] = currentPlayer;
         discsToFlip.forEach(piece => { board[piece.row][piece.col] = currentPlayer; });
+        playSound(placePieceSound); // Play sound when piece is placed
         return true;
     }
 
@@ -247,6 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function processTurnEnd() {
         renderBoard(); // Show result of the move
         switchPlayer(); // Switch to the next player
+        playSound(turnChangeSound); // Play sound when turn changes
 
         // Check if game ended
         if (checkGameOver()) return;
@@ -337,6 +346,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let winnerMessage;
         let resultClass = 'game-over';
         updateScores();
+        
+        // Play game over sound
+        playSound(gameOverSound);
         
         // Clear any existing classes
         messageAreaElement.className = 'message';
@@ -453,14 +465,64 @@ document.addEventListener('DOMContentLoaded', () => {
         return getValidMoves(player1, boardState).length === 0 && getValidMoves(player2, boardState).length === 0;
     }
 
-    // --- Theme Management ---
+    // --- Theme and Sound Management ---
     function initTheme() {
         // Always use dark mode
         document.body.classList.add('dark-mode');
         localStorage.setItem('reversiTheme', 'dark');
     }
+    
+    function toggleSound() {
+        soundEnabled = !soundEnabled;
+        localStorage.setItem('reversiSoundEnabled', soundEnabled);
+        updateSoundToggleIcon();
+    }
+    
+    function updateSoundToggleIcon() {
+        if (soundToggleBtn) {
+            soundToggleBtn.innerHTML = soundEnabled ? 
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>' : 
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>';
+            soundToggleBtn.setAttribute('aria-label', soundEnabled ? 'Sound On' : 'Sound Off');
+            soundToggleBtn.setAttribute('title', soundEnabled ? 'Sound On' : 'Sound Off');
+        }
+    }
+    
+    function playSound(sound) {
+        if (soundEnabled && sound) {
+            // Reset the sound to the beginning if it's already playing
+            sound.pause();
+            sound.currentTime = 0;
+            sound.play().catch(error => {
+                console.error("Error playing sound:", error);
+                // Don't show error to user as sound is not critical
+            });
+        }
+    }
 
-        // Theme toggle removed - always using dark mode
+        // --- Sound Management ---
+    function toggleSound() {
+        soundEnabled = !soundEnabled;
+        localStorage.setItem('reversiSoundEnabled', soundEnabled);
+        updateSoundToggleIcon();
+    }
+
+    function updateSoundToggleIcon() {
+        if (!soundToggleBtn) return;
+        
+        // Update the icon based on sound state
+        if (soundEnabled) {
+            soundToggleBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>';
+            soundToggleBtn.setAttribute('aria-label', 'Sound On');
+            soundToggleBtn.setAttribute('title', 'Sound On');
+        } else {
+            soundToggleBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>';
+            soundToggleBtn.setAttribute('aria-label', 'Sound Off');
+            soundToggleBtn.setAttribute('title', 'Sound Off');
+        }
+    }
+
+    // playSound function is already defined above
 
     // --- Game Setup and Controls ---
     function updateGameSettings() {
@@ -513,6 +575,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showScreen(gameContainer);
         startGame();
     });
+    
+    // Sound toggle button
+    if (soundToggleBtn) {
+        soundToggleBtn.addEventListener('click', toggleSound);
+    }
 
     pvcButton.addEventListener('click', (event) => {
         // Skip if the click was on the difficulty dropdown
@@ -555,6 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Page Load Setup ---
     // console.log("Page loaded. Setting up initial screen."); // Debug log
     initTheme(); // Initialize theme based on saved preference
+    updateSoundToggleIcon(); // Initialize sound toggle icon based on saved preference
     updateGameSettings(); // Read defaults & set initial difficulty visibility
     showScreen(startScreen); // Show the start screen first
 });
