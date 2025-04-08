@@ -222,6 +222,79 @@ body::before {
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
 
+/* Online Multiplayer Styles */
+.online-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.online-btn {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 5px;
+    color: #e0e0e0;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9em;
+}
+
+.online-btn:hover {
+    background: #3a3a3a;
+    border-color: #4CAF50;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+.online-btn:active {
+    transform: translateY(0);
+}
+
+.join-game-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+}
+
+#game-id-input, #player-name-input {
+    padding: 8px 12px;
+    border-radius: 5px;
+    background-color: #333;
+    color: #e0e0e0;
+    border: 1px solid #555;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.9em;
+}
+
+#game-id-input:focus, #player-name-input:focus {
+    border-color: #4CAF50;
+    outline: none;
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+}
+
+.online-info-container {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #444;
+    font-size: 0.9em;
+}
+
+.online-info-item {
+    margin-bottom: 8px;
+}
+
+#waiting-message {
+    margin-top: 10px;
+    color: #ffb74d;
+    font-style: italic;
+    animation: pulse 1.5s infinite alternate;
+}
+
 
 /* --- Game Container Styles --- */
 #game-container {
@@ -488,7 +561,6 @@ body::before {
 }
 
 /* This style block has been consolidated with the one below */
-}
 
 /* Style for indicating computer thinking */
 body.computer-thinking {
@@ -508,6 +580,43 @@ body.computer-thinking .cell {
 }
 body.computer-thinking button {
     pointer-events: none; /* Disable clicks on buttons */
+}
+
+/* Share Link Styles */
+.share-link-container {
+    margin-top: 10px;
+    text-align: center;
+}
+
+#share-link-button {
+    background: #3a3a3a;
+    border: 2px solid #4CAF50;
+    border-radius: 8px;
+    color: #ffffff;
+    padding: 8px 15px;
+    font-size: 0.9em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 5px 0;
+    width: 100%;
+}
+
+#share-link-button:hover {
+    background: #4CAF50;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+#share-link-button:active {
+    transform: translateY(0);
+}
+
+#link-copied-message {
+    color: #4CAF50;
+    font-size: 0.9em;
+    margin-top: 5px;
+    font-weight: bold;
 }
 
 /* Sound Toggle Styles */

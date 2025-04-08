@@ -6,6 +6,7 @@
     <title>Reversi</title>
     <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
@@ -39,6 +40,24 @@
                 </div>
                 <h2>2 Players</h2>
             </div>
+            <div class="mode-button" id="online-button">
+                <div class="mode-icon">
+                    <div class="player-icon">P1</div>
+                    <div class="vs">VS</div>
+                    <div class="player-icon">P2</div>
+                </div>
+                <h2>Online</h2>
+                <div class="online-options">
+                    <button id="create-game-button" class="online-btn">Create Game</button>
+                    <div class="join-game-container">
+                        <input type="text" id="game-id-input" placeholder="Game ID" maxlength="6">
+                        <button id="join-game-button" class="online-btn">Join Game</button>
+                    </div>
+                    <div id="player-name-container">
+                        <input type="text" id="player-name-input" placeholder="Your Name" maxlength="15">
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -63,6 +82,16 @@
                     </div>
                     <div class="turn-container">
                         <div class="turn">Turn: <span id="current-turn">Black</span></div>
+                    </div>
+                    <div id="online-info" class="online-info-container" style="display: none;">
+                        <div class="online-info-item">Game ID: <span id="game-id-display"></span></div>
+                        <div class="online-info-item">You are: <span id="player-color"></span></div>
+                        <div class="online-info-item">Opponent: <span id="opponent-name"></span></div>
+                        <div id="waiting-message" style="display: none;">Waiting for opponent...</div>
+                        <div class="share-link-container">
+                            <button id="share-link-button" class="online-btn">Share Link with Friend</button>
+                            <div id="link-copied-message" style="display: none;">Link copied!</div>
+                        </div>
                     </div>
                     <div class="sound-toggle-container">
                         <button id="sound-toggle" aria-label="Sound On" title="Sound On">

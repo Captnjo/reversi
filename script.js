@@ -1,4 +1,32 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- URL Parameter Handling ---
+    function getUrlParams() {
+        const params = {};
+        const queryString = window.location.search;
+        const urlParams = new URLSearchParams(queryString);
+        
+        // Check for join parameter
+        if (urlParams.has('join')) {
+            params.join = urlParams.get('join');
+        }
+        
+        // Check for error parameter
+        if (urlParams.has('error')) {
+            params.error = urlParams.get('error');
+        }
+        
+        return params;
+    }
+    
+    // Process URL parameters
+    const urlParams = getUrlParams();
+    
+    // Handle error parameter
+    if (urlParams.error) {
+        if (urlParams.error === 'gamenotfound') {
+            alert('Game not found. The game may have ended or never existed.');
+        }
+    }
     // --- DOM Elements ---
     const startScreen = document.getElementById('start-screen');
     const gameContainer = document.getElementById('game-container');
@@ -11,7 +39,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const messageAreaElement = document.getElementById('message-area');
     const pvpButton = document.getElementById('pvp-button');
     const pvcButton = document.getElementById('pvc-button');
+    const onlineButton = document.getElementById('online-button');
     const difficultySelect = document.getElementById('difficulty-select');
+    // Online multiplayer elements
+    const createGameButton = document.getElementById('create-game-button');
+    const joinGameButton = document.getElementById('join-game-button');
+    const gameIdInput = document.getElementById('game-id-input');
+    const playerNameInput = document.getElementById('player-name-input');
+    const gameIdDisplay = document.getElementById('game-id-display');
+    const playerColorDisplay = document.getElementById('player-color');
+    const opponentNameDisplay = document.getElementById('opponent-name');
+    const onlineInfoContainer = document.getElementById('online-info');
+    const waitingMessage = document.getElementById('waiting-message');
+    const shareLinkButton = document.getElementById('share-link-button');
+    const linkCopiedMessage = document.getElementById('link-copied-message');
     // Theme toggle elements removed - always using dark mode
     
     // --- Sound Elements ---
@@ -47,6 +88,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let computerPlayer = WHITE;
     let isComputerTurn = false;
     let soundEnabled = localStorage.getItem('reversiSoundEnabled') !== 'false'; // Default to true
+    
+    // --- Multiplayer Variables ---
+    let isOnlineGame = false;
+    let socket = null;
+    let gameId = null;
+    let playerColor = null;
+    let opponentName = null;
+    let isMyTurn = false;
+    let waitingForOpponent = false;
+    let opponentInfoElement = null;
 
     // --- Initialization and UI Switching ---
     function showScreen(screenToShow) {
@@ -139,7 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateTurnIndicator() {
         let turnText;
-        if (gameMode === 'pvc') {
+        if (isOnlineGame) {
+            turnText = isMyTurn ? 'Your Turn' : "Opponent's Turn";
+        } else if (gameMode === 'pvc') {
             turnText = currentPlayer === humanPlayer ? 'Your Turn (Black)' : "Computer's Turn (White)";
         } else {
             turnText = currentPlayer === BLACK ? 'Black' : 'White';
@@ -236,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Game Flow and Turn Management ---
     function handleCellClick(event) {
-        if (gameOver || isComputerTurn) return;
+        if (gameOver || isComputerTurn || (isOnlineGame && !isMyTurn)) return;
         const targetCell = event.target.closest('.cell');
         if (!targetCell) return;
         const row = parseInt(targetCell.dataset.row, 10);
@@ -249,7 +302,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         clearMessage();
-        if (placePiece(row, col)) { processTurnEnd(); }
+        
+        if (isOnlineGame) {
+            // Send move to server
+            socket.emit('makeMove', {
+                gameId: gameId,
+                row: row,
+                col: col,
+                playerColor: playerColor
+            });
+        } else {
+            // Local game
+            if (placePiece(row, col)) { processTurnEnd(); }
+        }
     }
 
     function processTurnEnd() {
@@ -547,12 +612,31 @@ document.addEventListener('DOMContentLoaded', () => {
             isComputerTurn = false;
             clearMessage();
             createBoardUI();
+            
+            // Handle online game specifics
+            if (isOnlineGame) {
+                // Show online info container
+                onlineInfoContainer.style.display = 'block';
+                
+                // Set current player based on player color
+                if (playerColor === 'BLACK') {
+                    currentPlayer = BLACK;
+                    isMyTurn = true;
+                } else {
+                    currentPlayer = WHITE;
+                    isMyTurn = false;
+                }
+            } else {
+                // Hide online info for local games
+                onlineInfoContainer.style.display = 'none';
+            }
+            
             renderBoard(); // This now handles initial highlight
             // console.log(`startGame: Game setup complete. Mode: ${gameMode}. Current Player: ${currentPlayer}`); // Debug log
             document.body.classList.remove('computer-thinking');
 
             // Initial computer move if computer is Black (not default)
-            if (gameMode === 'pvc' && currentPlayer === computerPlayer) {
+            if (!isOnlineGame && gameMode === 'pvc' && currentPlayer === computerPlayer) {
                // console.log("startGame: Triggering initial computer turn."); // Debug log
                isComputerTurn = true;
                document.body.classList.add('computer-thinking');
@@ -570,10 +654,73 @@ document.addEventListener('DOMContentLoaded', () => {
     pvpButton.addEventListener('click', () => {
         // console.log("2 Players mode selected."); // Debug log
         gameMode = 'pvp';
+        isOnlineGame = false;
         pvpButton.classList.add('selected');
         pvcButton.classList.remove('selected');
+        onlineButton.classList.remove('selected');
         showScreen(gameContainer);
         startGame();
+    });
+    
+    // Share link button event listener
+    shareLinkButton.addEventListener('click', () => {
+        if (gameId) {
+            const shareUrl = `${window.location.origin}/join/${gameId}`;
+            navigator.clipboard.writeText(shareUrl)
+                .then(() => {
+                    // Show copied message
+                    linkCopiedMessage.style.display = 'block';
+                    setTimeout(() => {
+                        linkCopiedMessage.style.display = 'none';
+                    }, 3000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy link: ', err);
+                    alert('Failed to copy link. Please copy this URL manually: ' + shareUrl);
+                });
+        }
+    });
+    
+    // Check if we should auto-join a game from URL parameter
+    if (urlParams.join) {
+        const gameIdToJoin = urlParams.join;
+        // Show the online options first
+        onlineButton.click();
+        // Auto-fill the game ID input
+        gameIdInput.value = gameIdToJoin;
+        // Focus on the player name input
+        playerNameInput.focus();
+    }
+    
+    // Online multiplayer button
+    onlineButton.addEventListener('click', (event) => {
+        // Don't trigger if clicking on child elements
+        if (event.target !== onlineButton && !onlineButton.contains(event.target)) {
+            return;
+        }
+        
+        onlineButton.classList.add('selected');
+        pvpButton.classList.remove('selected');
+        pvcButton.classList.remove('selected');
+    });
+    
+    // Create online game
+    createGameButton.addEventListener('click', () => {
+        const playerName = playerNameInput.value.trim() || 'Player 1';
+        createOnlineGame(playerName);
+    });
+    
+    // Join online game
+    joinGameButton.addEventListener('click', () => {
+        const gameId = gameIdInput.value.trim().toUpperCase();
+        const playerName = playerNameInput.value.trim() || 'Player 2';
+        
+        if (!gameId) {
+            alert('Please enter a valid Game ID');
+            return;
+        }
+        
+        joinOnlineGame(gameId, playerName);
     });
     
     // Sound toggle button
@@ -589,8 +736,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // console.log("1 Player mode selected."); // Debug log
         gameMode = 'pvc';
+        isOnlineGame = false;
         pvcButton.classList.add('selected');
         pvpButton.classList.remove('selected');
+        onlineButton.classList.remove('selected');
         showScreen(gameContainer);
         startGame();
     });
@@ -612,17 +761,260 @@ document.addEventListener('DOMContentLoaded', () => {
         // console.log("Restart (New Game) button clicked."); // Debug log
         showScreen(startScreen);
         gameOver = true; // Ensure any ongoing game logic stops
-    });
+        
+        // Reset online game state if applicable
+        if (isOnlineGame) {
+            isOnlineGame = false;
+            gameId = null;
+            playerColor = null;
+            opponentName = null;
+            isMyTurn = false;
+            
+            // Reset join button if we're returning from a game
+            if (joinGameButton) {
+                joinGameButton.disabled = false;
+                joinGameButton.textContent = 'Join Game';
+            }
+            
+            // Clear opponent info
+            if (opponentInfoElement) {
+                opponentInfoElement.textContent = '';
+            }
+            
+            // Disconnect from socket if connected
+            if (socket && socket.connected) {
+                socket.disconnect();
+            }
+        }
 
     // Set initial selection state
     pvpButton.classList.add('selected');
     
     // Difficulty dropdown doesn't need a change listener as we read its value when starting the game
 
+    // --- Online Multiplayer Functions ---
+    function initSocketConnection() {
+        // Connect to the server
+        socket = io();
+        
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+        
+        socket.on('error', (data) => {
+            alert(data.message);
+            if (waitingForOpponent) {
+                waitingForOpponent = false;
+                waitingMessage.style.display = 'none';
+            }
+        });
+        
+        socket.on('gameCreated', (data) => {
+            // Game created successfully
+            gameId = data.gameId;
+            playerColor = data.playerColor;
+            isMyTurn = playerColor === 'BLACK'; // Black goes first
+            waitingForOpponent = true;
+            
+            // Update UI
+            gameIdDisplay.textContent = gameId;
+            playerColorDisplay.textContent = playerColor;
+            waitingMessage.style.display = 'block';
+            onlineInfoContainer.style.display = 'block';
+            
+            // Start the game
+            showScreen(gameContainer);
+            startGame();
+        });
+        
+        socket.on('gameJoined', (data) => {
+            // Successfully joined a game
+            gameId = data.gameId;
+            playerColor = data.playerColor;
+            opponentName = data.opponentName;
+            isMyTurn = playerColor === 'BLACK'; // Black goes first
+            
+            // Update UI
+            gameIdDisplay.textContent = gameId;
+            playerColorDisplay.textContent = playerColor;
+            opponentNameDisplay.textContent = opponentName;
+            onlineInfoContainer.style.display = 'block';
+            
+            // Start the game
+            showScreen(gameContainer);
+            startGame();
+            
+            // Disable the join button
+            joinGameButton.disabled = true;
+            joinGameButton.textContent = 'Game Joined';
+        });
+        
+        socket.on('opponentJoined', (data) => {
+            // Opponent joined our game
+            opponentName = data.opponentName;
+            waitingForOpponent = false;
+            
+            // Update UI
+            opponentNameDisplay.textContent = opponentName;
+            waitingMessage.style.display = 'none';
+            
+            // Show message
+            showMessage(`${opponentName} joined the game!`);
+            setTimeout(clearMessage, 3000);
+        });
+        
+        socket.on('moveMade', (data) => {
+            // Process move from either player
+            const { row, col, playerColor: moveColor, board: serverBoard, currentTurn } = data;
+            
+            // Update the local board to match server state
+            updateBoardFromServer(serverBoard);
+            
+            // Update turn
+            isMyTurn = currentTurn === playerColor;
+            
+            // Play sound
+            playSound(placePieceSound);
+            
+            // Render the updated board
+            renderBoard();
+            
+            // Play turn change sound if it's now our turn
+            if (isMyTurn) {
+                playSound(turnChangeSound);
+            }
+        });
+        
+        socket.on('playerPassed', (data) => {
+            // A player had to pass their turn
+            const { playerColor: passedColor, nextTurn } = data;
+            
+            // Update the local board to match server state
+            updateBoardFromServer(data.board);
+            
+            // Update turn
+            isMyTurn = nextTurn === playerColor;
+            
+            // Show message
+            const passedPlayer = passedColor === playerColor ? 'You have' : 'Opponent has';
+            showMessage(`${passedPlayer} no valid moves. Turn passes.`);
+            
+            // Render the updated board
+            renderBoard();
+            
+            // Play turn change sound if it's now our turn
+            if (isMyTurn) {
+                playSound(turnChangeSound);
+            }
+        });
+        
+        socket.on('gameOver', (data) => {
+            // Game is over
+            gameOver = true;
+            
+            // Update the local board to match server state
+            updateBoardFromServer(data.board);
+            
+            // Determine winner message
+            let winnerMessage;
+            let resultClass = 'game-over';
+            
+            if (data.winner === playerColor) {
+                winnerMessage = `Game Over! You win ${data.scores[playerColor]} to ${data.scores[playerColor === 'BLACK' ? 'WHITE' : 'BLACK']}!`;
+                resultClass += ' win';
+            } else if (data.winner === 'DRAW') {
+                winnerMessage = `Game Over! It's a draw ${data.scores.BLACK} to ${data.scores.WHITE}!`;
+                resultClass += ' draw';
+            } else {
+                winnerMessage = `Game Over! Opponent wins ${data.scores[playerColor === 'BLACK' ? 'WHITE' : 'BLACK']} to ${data.scores[playerColor]}!`;
+                resultClass += ' lose';
+            }
+            
+            // Play game over sound
+            playSound(gameOverSound);
+            
+            // Show message
+            showMessage(winnerMessage);
+            messageAreaElement.className = 'message';
+            messageAreaElement.classList.add(...resultClass.split(' '));
+            
+            // Render the final board
+            renderBoard();
+        });
+        
+        socket.on('opponentLeft', (data) => {
+            // Opponent disconnected
+            showMessage(`${data.opponentName || 'Opponent'} left the game.`);
+            messageAreaElement.className = 'message game-over';
+            
+            // End the game
+            gameOver = true;
+            
+            // Disable further interaction
+            boardElement.querySelectorAll('.cell').forEach(cell => {
+                cell.removeEventListener('click', handleCellClick);
+            });
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            
+            if (isOnlineGame && !gameOver) {
+                showMessage('Disconnected from server. Please refresh the page.');
+                messageAreaElement.className = 'message game-over';
+                gameOver = true;
+            }
+        });
+    }
+    
+    function createOnlineGame(playerName) {
+        if (!socket) {
+            initSocketConnection();
+        }
+        
+        // Set game mode to online
+        gameMode = 'online';
+        isOnlineGame = true;
+        
+        // Send create game request to server
+        socket.emit('createGame', playerName);
+    }
+    
+    function joinOnlineGame(gameId, playerName) {
+        if (!socket) {
+            initSocketConnection();
+        }
+        
+        // Set game mode to online
+        gameMode = 'online';
+        isOnlineGame = true;
+        
+        // Send join game request to server
+        socket.emit('joinGame', { gameId, playerName });
+    }
+    
+    function updateBoardFromServer(serverBoard) {
+        // Convert server board format to local format
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                if (serverBoard[r][c] === 'BLACK') {
+                    board[r][c] = BLACK;
+                } else if (serverBoard[r][c] === 'WHITE') {
+                    board[r][c] = WHITE;
+                } else {
+                    board[r][c] = EMPTY;
+                }
+            }
+        }
+    }
+    
     // --- Initial Page Load Setup ---
     // console.log("Page loaded. Setting up initial screen."); // Debug log
     initTheme(); // Initialize theme based on saved preference
     updateSoundToggleIcon(); // Initialize sound toggle icon based on saved preference
     updateGameSettings(); // Read defaults & set initial difficulty visibility
     showScreen(startScreen); // Show the start screen first
+    // Close the restart button event listener
+    });
 });
